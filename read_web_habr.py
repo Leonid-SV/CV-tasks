@@ -11,7 +11,6 @@
 '''
 
 
-
 from bs4 import BeautifulSoup
 import datetime
 from datetime import datetime
@@ -22,39 +21,27 @@ import pandas as pd
 from pandas import ExcelWriter
 import urllib
 
-df_habr = pd.DataFrame(columns=[
-    "post_header",
-    "post_desc",
-    "post_date",
-    "post_author"
-])
 
-df_habr.loc[0] = ['bla-bla', 'Yahoooo', '01-01-19', 'balbes']
-
-print(df_habr)
-
-months = {'января':     1,
-          'февраля':    2,
-          'марта':      3,
-          'апреля':     4,
-          'мая':        5,
-          'июня':       6,
-          'июля':       7,
-          'августа':    8,
-          'сентября':   9,
-          'октября':    10,
-          'ноября':     11,
-          'декабря':    12
-          }
-
-# date_ = '26 ноября 2019 в 09:15'
-date_ = 'вчера в 23:06'
-
+# получение даты из строки
 def get_date(str_date: str):
     today = datetime.now()
     yesterday = today - timedelta(days=1)
 
     list_date = str_date.split()
+
+    months = {'января': 1,
+              'февраля': 2,
+              'марта': 3,
+              'апреля': 4,
+              'мая': 5,
+              'июня': 6,
+              'июля': 7,
+              'августа': 8,
+              'сентября': 9,
+              'октября': 10,
+              'ноября': 11,
+              'декабря': 12
+              }
 
     d = ''
     if list_date[0].lower() == 'сегодня':
@@ -67,12 +54,22 @@ def get_date(str_date: str):
         d_year = int(list_date[2])
         d = date(d_year, d_month, d_day)
 
-    print(f'{d.day}/{d.month}/{d.year}')
-        # print(f'{d_day}/{d_month}/{d_year}')
-        # print(f'{type(d_day)}/{type(d_month)}/{type(d_year)}')
-    return d
+    d_str = d.strftime("%m/%d/%Y")
+    return d_str
 
-get_date(date_)
+
+# проверка того, что дата старше года
+def date_check(date_txt, today):
+    try:
+        dt = datetime.datetime.strptime(date_txt, '%d/%m/%Y')
+        print(dt)
+        if (datetime.timedelta(days=365) > today - dt):
+            return True
+        else:
+            return False
+    except:
+        return False
+
 
 # получение текста страницы
 def get_html(url):
@@ -88,66 +85,98 @@ def get_html(url):
     return s
 
 
-def get_all():
+# получение данных
+def get_all(url_habr, count):
+    # создание DataFrame для хранения данных
+    df_habr = pd.DataFrame(columns=[
+        "Заголовок",
+        "Краткое описание",
+        "Дата публикации",
+        "Автор",
+        "Рейтинг",
+    ])
+
+    # получение сегодняшней даты
+    today = datetime.today()
 
     page_counter = 1
     flag_read = True
 
-    while flag_read and page_counter < 2:
-        url = f'https://habr.com/ru/all/page{page_counter}/'
+    while flag_read:
+
+        url = ''.join([url_habr, str(page_counter)])
+        print(url)
         page = get_html(url)
         if page != False:
             flag_read = True
             page_counter += 1
+        else:
+            break
 
         soup = BeautifulSoup(page, features="lxml")
 
         posts = soup.findAll('article', {'class': "post post_preview"})
 
+        # Cчитывание постов со страницы
         for post in posts:
-            post_date = post.find('span', {'class': "post__time"}).text
-            pass
+            post_date = get_date(post.find('span', {'class': "post__time"}).text)
 
-        print(post_date)
+            if date_check(post_date, today):
+                flag_read = False
 
-get_all()
+            post_title = post.find('a', {'class': "post__title_link"}).text
+            post_description = post.find('div', {'class': "post__text post__text-html js-mediator-article"}).text
+            post_author = post.find('a', {'class': "post__user-info user-info"}).text
+            try:
+                post_rate_text = post.find('span', {'class': "post-stats__result-counter"}).text
+                if post_rate_text[0] == '–': post_rate_text[0] = '-'
+                post_rate = int(post_rate_text)
 
-#
-# def read_data(url):
-#     # чтение таблицы со страницы urls
-#     data = pd.read_html(urls, attrs={'class': 'tt'})
-#     target_table = data[0]
-#
-#     # чтение Наззвания и ОГРН компании со страницы urls
-#     html = get_html(url)
-#     if html:
-#         soup = BeautifulSoup(html, features="lxml")
-#         data_ogrn = soup.find('span', title="Основной государственный регистрационный номер").parent.parent.text
-#         company_name = soup.find('a', {"class": "upper"}).text
-#         val_ogrn = data_ogrn.split()
-#
-#     # добавление строк с ИНН и КПП
-#     target_table.loc[len(target_table)] = ['Полное юридическое наименование:', company_name]
-#     inn_kpp = target_table.iloc[1][1]
-#     target_table.loc[len(target_table)] = ['ИНН:', inn_kpp.split(' / ')[0]]
-#     target_table.loc[len(target_table)] = ['КПП:', inn_kpp.split(' / ')[1]]
-#
-#     # добавление строки с ОГРН в таблицу DataFrame
-#     target_table.loc[len(target_table)] = val_ogrn
-#
-#
-#     #удаление ненужных данных
-#     target_table.drop([1, 2, 3, 4], inplace=True)
-#
-#     target_table.index = np.arange(len(target_table))
-#     print(target_table)
-#
-#     writer = ExcelWriter(f'company {target_table.iloc[3][1]}.xlsx')
-#     target_table.to_excel(writer, 'Sheet1')
-#     writer.save()
-#
-# if __name__ == '__main__':
-#     urls = 'https://www.list-org.com/company/4868135'
-#     # urls = 'file:///home/leonid/PL_projects/LP/HH_Infotec/%D0%9E%D0%9E%D0%9E%20_%D0%9A%D0%9E%D0%9D%D0%A2%D0%98%D0%9D%D0%95%D0%9D%D0%A2%D0%90%D0%9B%20%D0%9F%D0%9B%D0%AE%D0%A1_%20(%D0%9E%D0%9A%D0%9F%D0%9E_18520970).html'
-#     read_data(urls)
+            except (TypeError, ValueError):
+                post_rate = 0
 
+            # создание вектора значений для записи в DataFrame
+            line = [post_title, post_description, post_date, post_author, post_rate]
+            df_habr.loc[len(df_habr)] = line
+
+    # Сортировка по рейтингу
+    df_habr.sort_values(by=['Рейтинг'], ascending=False, inplace=True)
+
+    # Срез по количеству заданных первых значений
+    df_habr_result = df_habr.iloc[:count]
+    df_habr_result.index = np.arange(len(df_habr_result))
+
+    # Запись в excel-файл. Реализована замена существующего без проверки.
+    writer = ExcelWriter('habr_posts.xlsx')
+    df_habr_result.to_excel(writer, 'Sheet1')
+    writer.save()
+
+    return df_habr_result
+
+
+if __name__ == '__main__':
+    urls = 'https://habr.com/ru/top/yearly/page'
+    result = get_all(urls, 1000)
+
+'''
+requirements.txt:
+
+beautifulsoup4==4.8.1
+certifi==2019.9.11
+chardet==3.0.4
+et-xmlfile==1.0.1
+html5lib==1.0.1
+idna==2.8
+jdcal==1.4.1
+lxml==4.4.2
+numpy==1.17.4
+openpyxl==3.0.2
+pandas==0.25.3
+python-dateutil==2.8.1
+pytz==2019.3
+requests==2.22.0
+six==1.13.0
+soupsieve==1.9.5
+urllib3==1.25.7
+webencodings==0.5.1
+'''
